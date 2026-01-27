@@ -29,6 +29,7 @@ export interface AnalysisResult {
   transcript: TranscriptSegment[];
   audioSentiment: SentimentResult;
   textSentiment: SentimentResult;
+  rawJson?: unknown;
 }
 
 interface ResultsViewProps {
@@ -53,14 +54,22 @@ export const ResultsView = ({ results, selectedId, onSelect }: ResultsViewProps)
 
   const downloadTranscript = () => {
     if (!selectedResult) return;
-    const text = selectedResult.transcript
-      .map((s) => `[${formatTime(s.timestamp)}] ${s.speaker ? `${s.speaker}: ` : ""}${s.text}`)
-      .join("\n");
-    const blob = new Blob([text], { type: "text/plain" });
+
+    const payload =
+      selectedResult.rawJson ??
+      selectedResult.transcript.map((s) => ({
+        timestamp: s.timestamp,
+        speaker: s.speaker,
+        text: s.text,
+      }));
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${selectedResult.fileName.replace(/\.[^/.]+$/, "")}_transcript.txt`;
+    a.download = `${selectedResult.fileName.replace(/\.[^/.]+$/, "")}_transcript.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -137,7 +146,7 @@ export const ResultsView = ({ results, selectedId, onSelect }: ResultsViewProps)
               </Button>
               <Button variant="glass" size="sm" onClick={downloadTranscript}>
                 <Download className="w-4 h-4" />
-                Download
+                Download JSON
               </Button>
             </div>
           </div>

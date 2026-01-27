@@ -1,71 +1,35 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { NeuralBackground } from "@/components/NeuralBackground";
 import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { AudioUploader, AudioFile } from "@/components/AudioUploader";
 import { ProcessingView } from "@/components/ProcessingView";
-import { ResultsView, AnalysisResult } from "@/components/ResultsView";
+import { ResultsView, AnalysisResult, TranscriptSegment } from "@/components/ResultsView";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { Footer } from "@/components/Footer";
+import { toast } from "@/hooks/use-toast";
 
 type View = "home" | "upload" | "processing" | "results" | "analytics";
 
-// Mock data for demo
-const generateMockResults = (files: AudioFile[]): AnalysisResult[] => {
-  return files.map((file) => ({
-    id: file.id,
-    fileName: file.name,
-    transcript: [
-      {
-        id: "1",
-        speaker: "Speaker 1",
-        text: "Welcome to our quarterly review meeting. Today we'll be discussing the progress made on our key initiatives and the feedback we've received from our customers.",
-        timestamp: 0,
-      },
-      {
-        id: "2",
-        speaker: "Speaker 2",
-        text: "Thank you for the introduction. I'm excited to share that our customer satisfaction scores have increased by 15% this quarter. The team has done an exceptional job addressing concerns.",
-        timestamp: 12,
-      },
-      {
-        id: "3",
-        speaker: "Speaker 1",
-        text: "That's wonderful news! Can you elaborate on the specific improvements that contributed to this increase?",
-        timestamp: 28,
-      },
-      {
-        id: "4",
-        speaker: "Speaker 2",
-        text: "Certainly. We implemented a new response time policy and enhanced our support documentation. Additionally, the AI-powered chatbot has been handling routine inquiries effectively.",
-        timestamp: 35,
-      },
-      {
-        id: "5",
-        speaker: "Speaker 1",
-        text: "Excellent progress. Let's continue with this momentum and aim for even better results next quarter.",
-        timestamp: 52,
-      },
-    ],
-    audioSentiment: {
-      overall: Math.random() > 0.3 ? "positive" : Math.random() > 0.5 ? "neutral" : "negative",
-      confidence: Math.floor(75 + Math.random() * 20),
-      breakdown: {
-        positive: Math.floor(40 + Math.random() * 30),
-        neutral: Math.floor(20 + Math.random() * 20),
-        negative: Math.floor(5 + Math.random() * 15),
-      },
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:5000";
+
+const buildTranscriptSegments = (outputPayload: any): TranscriptSegment[] => {
+  if (Array.isArray(outputPayload)) {
+    return outputPayload.map((segment: any, index: number) => ({
+      id: `seg-${index}`,
+      speaker: segment?.speaker,
+      text: String(segment?.transcript ?? segment?.text ?? "").trim(),
+      timestamp: Number(segment?.start_time ?? 0),
+    }));
+  }
+
+  return [
+    {
+      id: "seg-0",
+      text: "Transcription completed.",
+      timestamp: 0,
     },
-    textSentiment: {
-      overall: Math.random() > 0.4 ? "positive" : Math.random() > 0.5 ? "neutral" : "negative",
-      confidence: Math.floor(80 + Math.random() * 15),
-      breakdown: {
-        positive: Math.floor(45 + Math.random() * 25),
-        neutral: Math.floor(25 + Math.random() * 15),
-        negative: Math.floor(5 + Math.random() * 10),
-      },
-    },
-  }));
+  ];
 };
 
 const Index = () => {
@@ -82,41 +46,101 @@ const Index = () => {
     setView("upload");
   }, []);
 
-  const handleProcess = useCallback(() => {
+  const handleProcess = useCallback(async () => {
     if (files.length === 0) return;
-    
+
     setView("processing");
     setProcessingStage("transcribing");
     setProcessingProgress(0);
-    setProcessingFileName(files[0]?.name || "");
 
-    // Simulate processing
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 2;
-      setProcessingProgress(Math.min(progress, 100));
+    const newResults: AnalysisResult[] = [];
 
-      if (progress === 50) {
+    for (const targetFile of files) {
+      setProcessingFileName(targetFile?.name || "");
+      setProcessingProgress(5);
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === targetFile.id ? { ...f, status: "processing", progress: 10 } : f
+        )
+      );
+
+      try {
+        const formData = new FormData();
+        formData.append("file", targetFile.file);
+
+        const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Transcription failed.");
+        }
+
         setProcessingStage("analyzing");
-      }
+        setProcessingProgress(80);
 
-      if (progress >= 100) {
-        clearInterval(interval);
-        // Update file statuses
-        const updatedFiles = files.map((f) => ({
-          ...f,
-          status: "completed" as const,
-          progress: 100,
-        }));
-        setFiles(updatedFiles);
-        
-        // Generate results
-        const mockResults = generateMockResults(updatedFiles);
-        setResults(mockResults);
-        setSelectedResultId(mockResults[0]?.id || "");
-        setView("results");
+      const transcriptSegments = buildTranscriptSegments(payload?.output);
+
+        const result: AnalysisResult = {
+          id: targetFile.id,
+          fileName: targetFile.name,
+          transcript: transcriptSegments,
+          audioSentiment: {
+            overall: "neutral",
+            confidence: 0,
+            breakdown: { positive: 0, neutral: 100, negative: 0 },
+          },
+          textSentiment: {
+            overall: "neutral",
+            confidence: 0,
+            breakdown: { positive: 0, neutral: 100, negative: 0 },
+          },
+        rawJson: payload?.output ?? payload,
+        };
+
+        newResults.push(result);
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === targetFile.id ? { ...f, status: "completed", progress: 100 } : f
+          )
+        );
+
+        if (payload?.output) {
+          const downloadName =
+            payload?.download_filename ??
+            `${targetFile.name.replace(/\.[^/.]+$/, "")}_transcript.json`;
+          const blob = new Blob([JSON.stringify(payload.output, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = downloadName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Transcription failed.";
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === targetFile.id ? { ...f, status: "error", progress: 0 } : f
+          )
+        );
+        toast({ title: "Upload failed", description: message });
       }
-    }, 50);
+    }
+
+    if (newResults.length > 0) {
+      setResults(newResults);
+      setSelectedResultId(newResults[0]?.id || "");
+      setProcessingProgress(100);
+      setView("results");
+    } else {
+      setView("upload");
+    }
   }, [files]);
 
   // Analytics data derived from results
