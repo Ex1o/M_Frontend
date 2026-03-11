@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
-import { AudioLines, BarChart3, Upload, Home } from "lucide-react";
+import { AudioLines, Upload, Home, Languages, PenSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type View = "home" | "upload" | "processing" | "results" | "analytics";
+type View = "home" | "upload" | "processing" | "review" | "editor" | "translate";
 
 interface HeaderProps {
   currentView: View;
@@ -14,8 +14,9 @@ export const Header = ({ currentView, onNavigate, hasResults }: HeaderProps) => 
   const navItems = [
     { id: "home" as const, label: "Home", icon: Home },
     { id: "upload" as const, label: "Upload", icon: Upload },
-    { id: "results" as const, label: "Results", icon: AudioLines, disabled: !hasResults },
-    { id: "analytics" as const, label: "Analytics", icon: BarChart3, disabled: !hasResults },
+    { id: "review" as const, label: "Review", icon: AudioLines, disabled: !hasResults },
+    { id: "editor" as const, label: "Editor", icon: PenSquare, disabled: !hasResults },
+    { id: "translate" as const, label: "Translator", icon: Languages },
   ];
 
   return (

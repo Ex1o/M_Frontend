@@ -1,12 +1,16 @@
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Upload, Sparkles, AudioLines, Brain } from "lucide-react";
+import { Upload, Sparkles, AudioLines, Brain, Globe } from "lucide-react";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface HeroSectionProps {
-  onUploadClick: () => void;
-}
+  onUploadClick?: () => void;
+  onUploadAndTranslateClick?: (languageCode: string) => void;
+} 
 
-export const HeroSection = ({ onUploadClick }: HeroSectionProps) => {
+export const HeroSection = ({ onUploadClick, onUploadAndTranslateClick }: HeroSectionProps) => {
+  const [lang, setLang] = useState("en");
   return (
     <section className="relative min-h-[80vh] flex flex-col items-center justify-center px-4 py-20">
       {/* Floating Icons */}
@@ -77,15 +81,42 @@ export const HeroSection = ({ onUploadClick }: HeroSectionProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
         >
-          <Button
-            variant="hero"
-            size="xl"
-            onClick={onUploadClick}
-            className="group"
-          >
-            <Upload className="w-5 h-5 transition-transform group-hover:-translate-y-1" />
-            Upload Audio Files
-          </Button>
+          <div className="flex items-center justify-center gap-6">
+            <Button
+              variant="hero"
+              size="xl"
+              onClick={onUploadClick}
+              className="group"
+            >
+              <Upload className="w-5 h-5 transition-transform group-hover:-translate-y-1" />
+              Transcript
+            </Button>
+
+            <div className="flex items-center gap-3">
+              <Select defaultValue="en" onValueChange={(v) => setLang(v)}>
+                <SelectTrigger className="w-40 h-10">
+                  <SelectValue placeholder="Language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="hi">हिन्दी</SelectItem>
+                  <SelectItem value="es">Español</SelectItem>
+                  <SelectItem value="fr">Français</SelectItem>
+                  <SelectItem value="de">Deutsch</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="hero"
+                size="xl"
+                onClick={() => onUploadAndTranslateClick?.(lang)}
+                className="group"
+              >
+                <Globe className="w-5 h-5 transition-transform group-hover:-translate-y-1" />
+                Transcript + Translation
+              </Button>
+            </div>
+          </div>
         </motion.div>
 
         {/* Stats */}
@@ -96,9 +127,7 @@ export const HeroSection = ({ onUploadClick }: HeroSectionProps) => {
           transition={{ delay: 0.7 }}
         >
           {[
-            { value: "99%", label: "Accuracy" },
-            { value: "50+", label: "Languages" },
-            { value: "<2s", label: "Processing" },
+            
           ].map((stat, i) => (
             <div key={i} className="text-center">
               <div className="text-3xl font-bold gradient-text">{stat.value}</div>
