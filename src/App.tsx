@@ -9,7 +9,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 
-// React Router v7 future flags
+// React Router v7 future flags — set once here on the router, not on RouterProvider
 const router = createBrowserRouter([
   {
     path: "/",
@@ -31,13 +31,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <RouterProvider
-        router={router}
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      />
+      <RouterProvider router={router} />
     </TooltipProvider>
   </QueryClientProvider>
 );

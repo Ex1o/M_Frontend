@@ -17,9 +17,9 @@ import { UploadCloud, Languages, FileText } from "lucide-react";
 
 type View = "home" | "upload" | "processing" | "review" | "editor" | "translate";
 
-// Empty string = use Vite dev proxy (/api/* → http://127.0.0.1:5000)
-// Set VITE_API_BASE_URL in .env only if deploying to a different host
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+// Empty string = use Vite dev proxy (/api/* → http://127.0.0.1:5000) in local dev.
+// In production (Vercel) VITE_API_URL is set via .env.production or the Vercel dashboard.
+const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 const buildTranscriptSegments = (segments: any[]): TranscriptSegment[] => {
   if (!Array.isArray(segments) || segments.length === 0) {
@@ -82,7 +82,6 @@ const Index = () => {
     translateSettingsRef.current = { shouldTranslate: true, targetLanguage: languageCode };
     setTranslatorLanguage(languageCode);
     setTranslateAfterTranscription(true);
-    console.log("[handleUploadAndTranslateClick] Set translation:", { shouldTranslate: true, targetLanguage: languageCode });
     navigateTo("upload");
   }, [navigateTo]);
 
@@ -105,7 +104,7 @@ const Index = () => {
 
     try {
       setTranslatorLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/translate`, {
+      const response = await fetch(`${API_URL}/api/translate`, {
         method: "POST",
         body: formData,
       });
@@ -184,13 +183,6 @@ const Index = () => {
     // Get translation settings from ref (always current, no stale closure issues)
     const { shouldTranslate, targetLanguage } = translateSettingsRef.current;
 
-    // Debug: Log translation settings at the start of processing
-    console.log("=== PROCESS START ===");
-    console.log("shouldTranslate (from ref):", shouldTranslate);
-    console.log("targetLanguage (from ref):", targetLanguage);
-    console.log("translateAfterTranscription (state):", translateAfterTranscription);
-    console.log("translatorLanguage (state):", translatorLanguage);
-
     navigateTo("processing");
     setProcessingStage("transcribing");
     setProcessingProgress(0);
@@ -210,7 +202,7 @@ const Index = () => {
         const formData = new FormData();
         formData.append("file", targetFile.file);
 
-        const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
+        const response = await fetch(`${API_URL}/api/transcribe`, {
           method: "POST",
           body: formData,
         });
@@ -284,18 +276,10 @@ const Index = () => {
           languageCode: languageCode,
         };
 
-        // If user requested translation along with transcription, call the translate API
-        // Use ref values which are always current (no stale closure issues)
-        console.log("[Translation] shouldTranslate (ref):", shouldTranslate);
-        console.log("[Translation] targetLanguage (ref):", targetLanguage);
-        console.log("[Translation] transcriptText length:", transcriptText?.length);
-
         if (shouldTranslate && transcriptText) {
           try {
             const tf = new FormData();
-            // Use the extracted transcriptText which is now properly populated
             const textToTranslate = transcriptText.trim();
-            console.log("[Translation] Text to translate:", textToTranslate.substring(0, 200));
 
             if (!textToTranslate) {
               toast({ title: "Translation skipped", description: "No transcript text to translate." });
@@ -305,18 +289,11 @@ const Index = () => {
               tf.append("file", transcriptBlob, filename);
               tf.append("target_language", targetLanguage);
 
-              console.log("[Translation] Calling /api/translate with language:", targetLanguage);
-
-              const trResp = await fetch(`${API_BASE_URL}/api/translate`, { method: "POST", body: tf });
+              const trResp = await fetch(`${API_URL}/api/translate`, { method: "POST", body: tf });
               const trPayload = await trResp.json().catch(() => null);
-              console.log("[Translation] Response status:", trResp.status);
-              console.log("[Translation] Response payload:", JSON.stringify(trPayload, null, 2));
-              console.log("[Translation] translated_text:", trPayload?.translated_text);
-              console.log("[Translation] translated_text length:", trPayload?.translated_text?.length);
 
               if (trResp.ok) {
                 const translatedText = trPayload?.translated_text || "";
-                console.log("[Translation] Setting translatedText on result:", translatedText.substring(0, 100));
                 (result as any).translatedText = translatedText;
                 (result as any).translatedLanguage = trPayload?.target_language || targetLanguage;
                 (result as any).translatedMeta = { download: trPayload?.download_filename, original: trPayload?.original_filename };
@@ -326,7 +303,7 @@ const Index = () => {
               }
             }
           } catch (err) {
-            console.error("[Translation] Error:", err);
+            console.error("Translation error:", err);
             toast({ title: "Translation failed", description: err instanceof Error ? err.message : String(err) });
           }
         }
@@ -342,7 +319,12 @@ const Index = () => {
           )
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Transcription failed.";
+        const message =
+          error instanceof TypeError
+            ? "Could not reach the server. Check your connection or try again later."
+            : error instanceof Error
+            ? error.message
+            : "Transcription failed.";
         setFiles((prev) =>
           prev.map((f) =>
             f.id === targetFile.id ? { ...f, status: "error", progress: 0 } : f
