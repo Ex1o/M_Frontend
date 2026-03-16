@@ -139,20 +139,22 @@ const Index = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Sync with browser history / hash so back button works across views
+  // Sync with browser history / hash so the back button works.
+  // Runs ONCE on mount — navigateTo handles pushState on every navigation,
+  // so there is no need to reinstall listeners on every view change.
   useEffect(() => {
     const allowed: View[] = ["home", "upload", "processing", "review", "editor", "translate"];
 
-    // Initialize from hash if present
+    // On mount: if there is already a hash in the URL, honour it.
     const initialHash = (window.location.hash || "").replace("#", "") as View;
     if (initialHash && allowed.includes(initialHash)) {
       navigateTo(initialHash, true);
     } else {
-      // ensure there's a replaceState for the current view
+      // No hash — write one so the back button has something to go back to.
       try {
-        window.history.replaceState({ view }, "", `#${view}`);
+        window.history.replaceState({ view: "home" }, "", "#home");
       } catch (e) {
-        /* ignore */
+        /* ignore in non-browser environments */
       }
     }
 
@@ -176,7 +178,8 @@ const Index = () => {
       window.removeEventListener("popstate", onPop);
       window.removeEventListener("hashchange", onPop);
     };
-  }, [navigateTo, view]);
+  }, [navigateTo]); // navigateTo is stable (useCallback with [] deps) — effect runs once
+
   const handleProcess = useCallback(async () => {
     if (files.length === 0) return;
 
@@ -353,7 +356,9 @@ const Index = () => {
     } else {
       navigateTo("upload");
     }
-  }, [files, translatorLanguage, translateAfterTranscription]);
+  // Only `files` is read directly. Translation settings are read from the ref,
+  // which is always current and does not need to be a dependency.
+  }, [files, navigateTo]);
 
   // Analytics data derived from results
   const analyticsData = {

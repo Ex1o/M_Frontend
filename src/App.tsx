@@ -8,7 +8,6 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-
 // React Router v7 future flags — set once here on the router, not on RouterProvider
 const router = createBrowserRouter([
   {
