@@ -202,10 +202,17 @@ const Index = () => {
         const formData = new FormData();
         formData.append("file", targetFile.file);
 
+        // 10-minute timeout — large audio files may take time to upload + transcribe
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+
         const response = await fetch(`${API_URL}/api/transcribe`, {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         const contentType = response.headers.get("content-type") ?? "";
         let payload: any = null;
@@ -320,7 +327,9 @@ const Index = () => {
         );
       } catch (error) {
         const message =
-          error instanceof TypeError
+          error instanceof Error && error.name === "AbortError"
+            ? "Request timed out (10 min). Try a shorter audio file or check your connection."
+            : error instanceof TypeError
             ? "Could not reach the server. Check your connection or try again later."
             : error instanceof Error
             ? error.message
