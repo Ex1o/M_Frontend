@@ -23,7 +23,9 @@ const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 const extractSpeakerIdsFromFilename = (filename: string): string[] => {
   const base = filename.replace(/\.[^.]+$/, "").trim();
-  const normalized = base.replace(/\s+\d+$/, "");
+  const normalized = base
+    .replace(/\s+\d+$/, "")
+    .replace(/\s*\(\d+\)$/, "");
   return normalized
     .split(/[-_]/)
     .map((token) => token.trim())
