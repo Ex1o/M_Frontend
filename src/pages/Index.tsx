@@ -36,8 +36,10 @@ const buildTranscriptSegments = (segments: any[]): TranscriptSegment[] => {
   }
   return segments.map((seg: any, index: number) => ({
     id: `seg-${index}`,
-    // speaker can be an object { id, name } or a plain string
-    speaker: seg?.speaker?.name ?? seg?.speaker ?? undefined,
+    speaker:
+      seg?.speaker?.id != null && seg?.speaker?.id !== ""
+        ? `Speaker ${String(seg.speaker.id)}`
+        : seg?.speaker?.name ?? seg?.speaker ?? undefined,
     text: String(seg?.text ?? seg?.transcript ?? "").trim(),
     timestamp: Number(seg?.start_time ?? 0),
   }));
@@ -263,28 +265,48 @@ const Index = () => {
 
         setProcessingStage("analyzing");
         setProcessingProgress(80);
-
-        const transcriptSegments = buildTranscriptSegments(segments);
-
-        // flat_segments = the download format: { index, speaker_id, start_time, end_time, text }
         const extractedSpeakerIds = extractSpeakerIdsFromFilename(targetFile.name);
         const speakerSlots = new Map<string, number>();
 
-        const flatSegments = payload?.data?.flat_segments ?? segments.map((seg: any, i: number) => {
-          const rawSpeaker = String(seg?.speaker?.id ?? seg?.speaker?.name ?? seg?.speaker ?? "unknown");
-          if (!speakerSlots.has(rawSpeaker)) {
-            speakerSlots.set(rawSpeaker, speakerSlots.size);
+        const mapSpeakerId = (rawSpeakerKey: string): string => {
+          const normalizedRawSpeaker = String(rawSpeakerKey || "unknown");
+          if (!speakerSlots.has(normalizedRawSpeaker)) {
+            speakerSlots.set(normalizedRawSpeaker, speakerSlots.size);
           }
+          const slotIndex = speakerSlots.get(normalizedRawSpeaker) ?? 0;
+          return extractedSpeakerIds[slotIndex] ?? normalizedRawSpeaker;
+        };
 
-          const slotIndex = speakerSlots.get(rawSpeaker) ?? 0;
-          const mappedSpeakerId = extractedSpeakerIds[slotIndex] ?? rawSpeaker;
+        const remappedSegments = segments.map((seg: any) => {
+          const rawSpeaker = String(seg?.speaker?.id ?? seg?.speaker?.name ?? seg?.speaker ?? "unknown");
+          const mappedSpeakerId = mapSpeakerId(rawSpeaker);
 
           return {
-            index: i,
+            ...seg,
+            speaker: {
+              id: mappedSpeakerId,
+              name: `Speaker ${mappedSpeakerId}`,
+            },
+          };
+        });
+
+        const transcriptSegments = buildTranscriptSegments(remappedSegments);
+
+        // flat_segments = the download format: { index, speaker_id, start_time, end_time, text }
+        const sourceFlatSegments = Array.isArray(payload?.data?.flat_segments)
+          ? payload.data.flat_segments
+          : remappedSegments;
+
+        const flatSegments = sourceFlatSegments.map((seg: any, i: number) => {
+          const rawSpeaker = String(seg?.speaker_id ?? seg?.speaker?.id ?? seg?.speaker?.name ?? seg?.speaker ?? "unknown");
+          const mappedSpeakerId = mapSpeakerId(rawSpeaker);
+
+          return {
+            index: Number(seg?.index ?? i),
             speaker_id: mappedSpeakerId,
-            start_time: seg?.start_time ?? 0,
-            end_time: seg?.end_time ?? 0,
-            text: (seg?.text ?? "").trim(),
+            start_time: Number(seg?.start_time ?? 0),
+            end_time: Number(seg?.end_time ?? 0),
+            text: String(seg?.text ?? "").trim(),
           };
         });
 
