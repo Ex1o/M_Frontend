@@ -21,6 +21,15 @@ type View = "home" | "upload" | "processing" | "review" | "editor" | "translate"
 // In production (Vercel) VITE_API_URL is set via .env.production or the Vercel dashboard.
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
+const extractSpeakerIdsFromFilename = (filename: string): string[] => {
+  const base = filename.replace(/\.[^.]+$/, "").trim();
+  const normalized = base.replace(/\s+\d+$/, "");
+  return normalized
+    .split(/[-_]/)
+    .map((token) => token.trim())
+    .filter((token) => /^\d+$/.test(token));
+};
+
 const buildTranscriptSegments = (segments: any[]): TranscriptSegment[] => {
   if (!Array.isArray(segments) || segments.length === 0) {
     return [{ id: "seg-0", text: "Transcription completed.", timestamp: 0 }];
@@ -258,13 +267,26 @@ const Index = () => {
         const transcriptSegments = buildTranscriptSegments(segments);
 
         // flat_segments = the download format: { index, speaker_id, start_time, end_time, text }
-        const flatSegments = payload?.data?.flat_segments ?? segments.map((seg: any, i: number) => ({
-          index: i,
-          speaker_id: seg?.speaker?.id ?? "unknown",
-          start_time: seg?.start_time ?? 0,
-          end_time: seg?.end_time ?? 0,
-          text: (seg?.text ?? "").trim(),
-        }));
+        const extractedSpeakerIds = extractSpeakerIdsFromFilename(targetFile.name);
+        const speakerSlots = new Map<string, number>();
+
+        const flatSegments = payload?.data?.flat_segments ?? segments.map((seg: any, i: number) => {
+          const rawSpeaker = String(seg?.speaker?.id ?? seg?.speaker?.name ?? seg?.speaker ?? "unknown");
+          if (!speakerSlots.has(rawSpeaker)) {
+            speakerSlots.set(rawSpeaker, speakerSlots.size);
+          }
+
+          const slotIndex = speakerSlots.get(rawSpeaker) ?? 0;
+          const mappedSpeakerId = extractedSpeakerIds[slotIndex] ?? rawSpeaker;
+
+          return {
+            index: i,
+            speaker_id: mappedSpeakerId,
+            start_time: seg?.start_time ?? 0,
+            end_time: seg?.end_time ?? 0,
+            text: (seg?.text ?? "").trim(),
+          };
+        });
 
         const result: AnalysisResult = {
           id: targetFile.id,
